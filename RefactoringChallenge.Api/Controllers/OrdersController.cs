@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using Mapster;
 using MapsterMapper;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using RefactoringChallenge.Entities;
+using RefactoringChallenge.OrderClient;
 
 namespace RefactoringChallenge.Controllers
 {
@@ -12,41 +13,40 @@ namespace RefactoringChallenge.Controllers
     [Route("[controller]")]
     public class OrdersController : Controller
     {
-        private readonly NorthwindDbContext _northwindDbContext;
+        private readonly IOrderClient _orderClient;
         private readonly IMapper _mapper;
 
-        public OrdersController(NorthwindDbContext northwindDbContext, IMapper mapper)
+        public OrdersController(IOrderClient orderClient, IMapper mapper)
         {
-            _northwindDbContext = northwindDbContext;
+            _orderClient = orderClient;
             _mapper = mapper;
         }
 
         [HttpGet]
         public IActionResult Get(int? skip = null, int? take = null)
         {
-            var query = _northwindDbContext.Orders;
-            if (skip != null)
-            {
-                query.Skip(skip.Value);
-            }
-            if (take != null)
-            {
-                query.Take(take.Value);
-            }
-            var result = _mapper.From(query).ProjectToType<OrderResponse>().ToList();
+            var orders = _orderClient.GetOrders(skip, take);
+
+            var result = orders.Adapt<IEnumerable<OrderResponse>>();
+
             return Json(result);
         }
-
 
         [HttpGet("{orderId}")]
         public IActionResult GetById([FromRoute] int orderId)
         {
-            var result = _mapper.From(_northwindDbContext.Orders).ProjectToType<OrderResponse>().FirstOrDefault(o => o.OrderId == orderId);
-
-            if (result == null)
-                return NotFound();
-
-            return Json(result);
+            var order = _orderClient.GetOrderById(orderId);
+            switch (order.Result)
+            {
+                case GetOrderResult.Success:
+                    var result = order.Adapt<OrderResponse>();
+                    return Json(result);
+                case GetOrderResult.OrderNotFound:
+                    return NotFound(order.Error);
+                case GetOrderResult.UnknownError:
+                default:
+                    return StatusCode(StatusCodes.Status500InternalServerError, order.Error);
+            }
         }
 
         [HttpPost("[action]")]
@@ -93,19 +93,23 @@ namespace RefactoringChallenge.Controllers
                 ShipCountry = shipCountry,
                 OrderDetails = newOrderDetails,
             };
-            _northwindDbContext.Orders.Add(newOrder);
-            _northwindDbContext.SaveChanges();
-
-            return Json(newOrder.Adapt<OrderResponse>());
+            
+            var result = _orderClient.CreateOrder(newOrder);
+            switch (result.Result)
+            {
+                case CreateOrderResult.Success:
+                    return Json(result.CreatedOrder.Adapt<OrderResponse>());
+                case CreateOrderResult.ProductNotFound:
+                    return NotFound(result.Error);
+                case CreateOrderResult.UnknownError:
+                default:
+                    return StatusCode(StatusCodes.Status500InternalServerError, result.Error);
+            }
         }
 
         [HttpPost("{orderId}/[action]")]
         public IActionResult AddProductsToOrder([FromRoute] int orderId, IEnumerable<OrderDetailRequest> orderDetails)
         {
-            var order = _northwindDbContext.Orders.FirstOrDefault(o => o.OrderId == orderId);
-            if (order == null)
-                return NotFound();
-
             var newOrderDetails = new List<OrderDetail>();
             foreach (var orderDetail in orderDetails)
             {
@@ -119,26 +123,37 @@ namespace RefactoringChallenge.Controllers
                 });
             }
 
-            _northwindDbContext.OrderDetails.AddRange(newOrderDetails);
-            _northwindDbContext.SaveChanges();
+            var clientResult = _orderClient.AddProductsToOrder(orderId, newOrderDetails);
 
-            return Json(newOrderDetails.Select(od => od.Adapt<OrderDetailResponse>()));
+            switch (clientResult.Result)
+            {
+                case AddProductResult.Success:
+                    return Json(clientResult.UpdatedOrder.Adapt<OrderDetailResponse>());
+                case AddProductResult.OrderNotFound:
+                case AddProductResult.ProductNotFound:
+                    return NotFound(clientResult.Error);
+                    break;
+                case AddProductResult.UnknownError:
+                default:
+                    return StatusCode(StatusCodes.Status500InternalServerError, clientResult.Error);
+            }
         }
 
         [HttpPost("{orderId}/[action]")]
         public IActionResult Delete([FromRoute] int orderId)
         {
-            var order = _northwindDbContext.Orders.FirstOrDefault(o => o.OrderId == orderId);
-            if (order == null)
-                return NotFound();
+            var result = _orderClient.DeleteOrder(orderId);
 
-            var orderDetails = _northwindDbContext.OrderDetails.Where(od => od.OrderId == orderId);
-
-            _northwindDbContext.OrderDetails.RemoveRange(orderDetails);
-            _northwindDbContext.Orders.Remove(order);
-            _northwindDbContext.SaveChanges();
-
-            return Ok();
+            switch (result.Result)
+            {
+                case DeleteOrderResult.Success:
+                    return Ok();
+                case DeleteOrderResult.OrderNotFound:
+                    return NotFound(result.Error);
+                case DeleteOrderResult.UnknownError:
+                default:
+                    return StatusCode(StatusCodes.Status500InternalServerError, result.Error);
+            }
         }
     }
 }

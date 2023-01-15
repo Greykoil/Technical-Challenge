@@ -6,7 +6,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using RefactoringChallenge.DbClient;
 using RefactoringChallenge.Entities;
+using RefactoringChallenge.OrderClient;
 
 namespace RefactoringChallenge
 {
@@ -26,6 +28,8 @@ namespace RefactoringChallenge
 
             services.AddSingleton(TypeAdapterConfig.GlobalSettings);
             services.AddScoped<IMapper, ServiceMapper>();
+            services.AddScoped<IOrderClient, DefaultOrderClient>();
+            services.AddScoped<IDbClient, NorthWindDbClient>();
 
             services.AddControllers();
 
