@@ -16,7 +16,6 @@ namespace RefactoringChallenge.OrderClient
 
         public AddProductsResponse AddProductsToOrder(int orderId, IEnumerable<OrderDetail> orderDetails)
         {
-
             if (!DbClient.OrderExists(orderId))
             {
                 return new AddProductsResponse()
@@ -25,6 +24,26 @@ namespace RefactoringChallenge.OrderClient
                     UpdatedOrder = null,
                     Error = $"Order not found for Id {orderId}"
                 };
+            }
+
+            var current = DbClient.GetOrderById(orderId);
+
+
+            // This logic should probably be in the db context rather than here,  
+            // It is not clear what should happen in this case. 
+            // Currently the whole update is rejected, but it would be possible to ignore the duplicate, 
+            // or to update the duplicate details.
+            foreach (var item in orderDetails)
+            {
+                if (current.OrderDetails.Any(x => x.ProductId == item.ProductId))
+                {
+                    return new AddProductsResponse()
+                    {
+                        Result = AddProductResult.ProductAlreadyAdded,
+                        UpdatedOrder = null,
+                        Error = $"Product {item.ProductId} already exists for order {orderId}"
+                    };
+                }
             }
 
             foreach (var productId in orderDetails.Select(x => x.ProductId))
@@ -63,6 +82,16 @@ namespace RefactoringChallenge.OrderClient
 
         public CreateOrderResponse CreateOrder(Order order)
         {
+            if (!DbClient.CustomerExists(order.CustomerId))
+            {
+                return new CreateOrderResponse()
+                {
+                    Result = CreateOrderResult.CustomerNotFound,
+                    CreatedOrder = null,
+                    Error = $"Customer not found for id {order.CustomerId}"
+                };
+            }
+
             foreach (var productId in order.OrderDetails.Select(x => x.ProductId))
             {
                 if (!DbClient.ProductExists(productId))
@@ -89,6 +118,7 @@ namespace RefactoringChallenge.OrderClient
             return new CreateOrderResponse()
             {
                 Result = CreateOrderResult.Success,
+                CreatedOrder = createdOrder,
                 Error = ""
             };
         }
@@ -127,7 +157,7 @@ namespace RefactoringChallenge.OrderClient
             return new GetOrderResponse()
             {
                 Result = GetOrderResult.Success,
-                Order = null,
+                Order = order,
                 Error = ""
             };
         }

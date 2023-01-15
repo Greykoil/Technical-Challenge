@@ -7,6 +7,7 @@ namespace RefactoringChallenge.OrderClient
         Success,
         OrderNotFound,
         ProductNotFound,
+        ProductAlreadyAdded,
         UnknownError
     }
 

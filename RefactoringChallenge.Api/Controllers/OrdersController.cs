@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using Mapster;
 using MapsterMapper;
 using Microsoft.AspNetCore.Http;
@@ -35,17 +36,17 @@ namespace RefactoringChallenge.Controllers
         [HttpGet("{orderId}")]
         public IActionResult GetById([FromRoute] int orderId)
         {
-            var order = _orderClient.GetOrderById(orderId);
-            switch (order.Result)
+            var orderResponse = _orderClient.GetOrderById(orderId);
+            switch (orderResponse.Result)
             {
                 case GetOrderResult.Success:
-                    var result = order.Adapt<OrderResponse>();
+                    var result = orderResponse.Order.Adapt<OrderResponse>();
                     return Json(result);
                 case GetOrderResult.OrderNotFound:
-                    return NotFound(order.Error);
+                    return NotFound(orderResponse.Error);
                 case GetOrderResult.UnknownError:
                 default:
-                    return StatusCode(StatusCodes.Status500InternalServerError, order.Error);
+                    return StatusCode(StatusCodes.Status500InternalServerError, orderResponse.Error);
             }
         }
 
@@ -94,16 +95,17 @@ namespace RefactoringChallenge.Controllers
                 OrderDetails = newOrderDetails,
             };
             
-            var result = _orderClient.CreateOrder(newOrder);
-            switch (result.Result)
+            var createResponse = _orderClient.CreateOrder(newOrder);
+            switch (createResponse.Result)
             {
                 case CreateOrderResult.Success:
-                    return Json(result.CreatedOrder.Adapt<OrderResponse>());
+                    return Json(createResponse.CreatedOrder.Adapt<OrderResponse>());
                 case CreateOrderResult.ProductNotFound:
-                    return NotFound(result.Error);
+                case CreateOrderResult.CustomerNotFound:
+                    return NotFound(createResponse.Error);
                 case CreateOrderResult.UnknownError:
                 default:
-                    return StatusCode(StatusCodes.Status500InternalServerError, result.Error);
+                    return StatusCode(StatusCodes.Status500InternalServerError, createResponse.Error);
             }
         }
 
@@ -123,36 +125,37 @@ namespace RefactoringChallenge.Controllers
                 });
             }
 
-            var clientResult = _orderClient.AddProductsToOrder(orderId, newOrderDetails);
+            var addResponse = _orderClient.AddProductsToOrder(orderId, newOrderDetails);
 
-            switch (clientResult.Result)
+            switch (addResponse.Result)
             {
                 case AddProductResult.Success:
-                    return Json(clientResult.UpdatedOrder.Adapt<OrderDetailResponse>());
+                    return Json(newOrderDetails.Select(od => od.Adapt<OrderDetailResponse>()));
                 case AddProductResult.OrderNotFound:
                 case AddProductResult.ProductNotFound:
-                    return NotFound(clientResult.Error);
-                    break;
+                    return NotFound(addResponse.Error);
+                case AddProductResult.ProductAlreadyAdded:
+                    return StatusCode(StatusCodes.Status409Conflict, addResponse.Error);
                 case AddProductResult.UnknownError:
                 default:
-                    return StatusCode(StatusCodes.Status500InternalServerError, clientResult.Error);
+                    return StatusCode(StatusCodes.Status500InternalServerError, addResponse.Error);
             }
         }
 
         [HttpPost("{orderId}/[action]")]
         public IActionResult Delete([FromRoute] int orderId)
         {
-            var result = _orderClient.DeleteOrder(orderId);
+            var deleteResponse = _orderClient.DeleteOrder(orderId);
 
-            switch (result.Result)
+            switch (deleteResponse.Result)
             {
                 case DeleteOrderResult.Success:
                     return Ok();
                 case DeleteOrderResult.OrderNotFound:
-                    return NotFound(result.Error);
+                    return NotFound(deleteResponse.Error);
                 case DeleteOrderResult.UnknownError:
                 default:
-                    return StatusCode(StatusCodes.Status500InternalServerError, result.Error);
+                    return StatusCode(StatusCodes.Status500InternalServerError, deleteResponse.Error);
             }
         }
     }

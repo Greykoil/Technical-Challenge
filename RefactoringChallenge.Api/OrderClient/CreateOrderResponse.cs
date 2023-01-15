@@ -6,6 +6,7 @@ namespace RefactoringChallenge.OrderClient
     {
         Success,
         ProductNotFound,
+        CustomerNotFound,
         UnknownError
     }
 

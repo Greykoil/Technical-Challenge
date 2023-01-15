@@ -7,6 +7,7 @@ namespace RefactoringChallenge.DbClient
     {
         bool OrderExists(int orderId);
         bool ProductExists(int productId);
+        bool CustomerExists(string customerId);
         void AddProductsToOrder(int orderId, IEnumerable<OrderDetail> orderDetails);
         Order? GetOrderById(int orderId);
         int CreateOrder(Order order);

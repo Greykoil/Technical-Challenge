@@ -9,7 +9,7 @@ namespace RefactoringChallenge.DbClient
     {
         private readonly NorthwindDbContext _northwindDbContext;
 
-        public NorthWindDbClient(NorthwindDbContext northwindDbContext)
+        public NorthWindDbClient(NorthwindDbContext northwindDbContext, IMapper mapper)
         {
             _northwindDbContext = northwindDbContext;
         }
@@ -62,11 +62,21 @@ namespace RefactoringChallenge.DbClient
 
         public Order? GetOrderById(int orderId)
         {
-            return _northwindDbContext.Orders.FirstOrDefault(o => o.OrderId == orderId);
+
+            var order = _northwindDbContext.Orders.FirstOrDefault(o => o.OrderId == orderId);
+            if (order == null)
+            {
+                return order;
+            }
+            IEnumerable<OrderDetail> orderDetails = _northwindDbContext.OrderDetails.Where(od => od.OrderId == orderId);
+            order.OrderDetails = orderDetails.ToList();
+            return order;
         }
 
         public IEnumerable<Order> GetOrders(int? skip, int? take)
         {
+            IEnumerable<Order> orders = new List<Order>();
+            
             var query = _northwindDbContext.Orders;
             IQueryable<Order> result = query;
             if (skip != null)
@@ -76,6 +86,12 @@ namespace RefactoringChallenge.DbClient
             if (take != null)
             {
                 result = result.Take(take.Value);
+            }
+
+            foreach (var order in result.ToList())
+            {
+                IEnumerable<OrderDetail> orderDetails = _northwindDbContext.OrderDetails.Where(od => od.OrderId == order.OrderId);
+                order.OrderDetails = orderDetails.ToList();
             }
             return result;
         }
@@ -88,6 +104,11 @@ namespace RefactoringChallenge.DbClient
         public bool ProductExists(int productId)
         {
             return _northwindDbContext.Products.Any(x => x.ProductId == productId);
+        }
+
+        public bool CustomerExists(string customerId)
+        {
+            return _northwindDbContext.Customers.Any(x => x.CustomerId == customerId);
         }
     }
 }
